@@ -1,3 +1,4 @@
 /target
 src/*.txt
 *Resources
+.DS_Store
