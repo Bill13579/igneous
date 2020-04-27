@@ -92,7 +92,7 @@ impl EventHandler for Handler {
             if continue_or_not {
                 timeout = t;
 
-                let mut i = 1;
+                let mut i = 0;
                 let states = self.states.clone();
                 let db = self.db.clone();
                 let statusMap = self.statusMap.clone();
@@ -111,17 +111,20 @@ impl EventHandler for Handler {
                 std::mem::drop(guard);
 
                 let (tx, rx) = mpsc::channel::<Message>();
+                tx.send(msg);
                 *entry = Some(tx);
 
                 let var_def = regex::Regex::new(";;(.*?);;").unwrap();
                 let var_val = regex::Regex::new("<(.*?)>").unwrap();
 
                 thread::spawn(move || {
-                    thread::sleep(time::Duration::from_millis((1000.0 * timeout).round() as u64));
+                    let mut msg = rx.recv().unwrap_or_else(|e| {
+                        process::exit(1);
+                    });
                     loop {
                         match &states[i] {
                             State::Trigger(req, t) => {
-                                let mut msg = rx.recv().unwrap_or_else(|e| {
+                                msg = rx.recv().unwrap_or_else(|e| {
                                     process::exit(1);
                                 });
                                 let mut required = vec![];
