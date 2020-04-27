@@ -96,6 +96,7 @@ impl EventHandler for Handler {
                 let states = self.states.clone();
                 let db = self.db.clone();
                 let statusMap = self.statusMap.clone();
+                let mut channel_id = msg.channel_id;
 
                 let guard = db.lock().unwrap();
                 let original_user = format!("u{}", msg.author.id.0.to_string());
@@ -118,13 +119,10 @@ impl EventHandler for Handler {
                 let var_val = regex::Regex::new("<(.*?)>").unwrap();
 
                 thread::spawn(move || {
-                    let mut msg = rx.recv().unwrap_or_else(|e| {
-                        process::exit(1);
-                    });
                     loop {
                         match &states[i] {
                             State::Trigger(req, t) => {
-                                msg = rx.recv().unwrap_or_else(|e| {
+                                let mut msg = rx.recv().unwrap_or_else(|e| {
                                     process::exit(1);
                                 });
                                 let mut required = vec![];
@@ -132,35 +130,46 @@ impl EventHandler for Handler {
                                     required.push(m.get(1).unwrap().as_str().to_owned());
                                 }
                                 if required.len() > 0 {
-                                    while msg.author.id.0 == ctx.cache.read().user.id.0 {
-                                        msg = rx.recv().unwrap_or_else(|e| {
-                                            process::exit(1);
-                                        });
-                                    }
-                                    let mut new_pat = Regex::new(&var_def.replace_all(&regex::escape(&req.original()), "(.*?)").into_owned().to_string());
-                                    let new_pat = match new_pat {
-                                        Ok(p) => p,
-                                        Err(e) => {
-                                            return;
+                                    let mut success = false;
+                                    while !success {
+                                        while msg.author.id.0 == ctx.cache.read().user.id.0 {
+                                            msg = rx.recv().unwrap_or_else(|e| {
+                                                process::exit(1);
+                                            });
                                         }
-                                    };
-                                    let guard = db.lock().unwrap();
-                                    for (c, n) in new_pat.captures_iter(&msg.content).zip(required.iter()) {
-                                        let c = c.get(1).unwrap().as_str().to_owned();
-                                        guard.execute(
-                                            &format!(
-                                                "INSERT OR IGNORE INTO {} VALUES (?, ?)"
-                                            , original_user),
-                                            params![n, &c],
-                                        ).unwrap();
-                                        guard.execute(
-                                            &format!(
-                                                "UPDATE {} SET val=? WHERE id=?"
-                                            , original_user),
-                                            params![&c, n],
-                                        ).unwrap();
+
+                                        let mut new_pat = Regex::new(&var_def.replace_all(&regex::escape(&req.original()), "(.*?)").into_owned().to_string());
+                                        let new_pat = match new_pat {
+                                            Ok(p) => p,
+                                            Err(e) => {
+                                                return;
+                                            }
+                                        };
+
+                                        let guard = db.lock().unwrap();
+                                        let mut number_of_matches = 0;
+                                        for (c, n) in new_pat.captures_iter(&msg.content).zip(required.iter()) {
+                                            number_of_matches += 1;
+                                            let c = c.get(1).unwrap().as_str().to_owned();
+                                            guard.execute(
+                                                &format!(
+                                                    "INSERT OR IGNORE INTO {} VALUES (?, ?)"
+                                                , original_user),
+                                                params![n, &c],
+                                            ).unwrap();
+                                            guard.execute(
+                                                &format!(
+                                                    "UPDATE {} SET val=? WHERE id=?"
+                                                , original_user),
+                                                params![&c, n],
+                                            ).unwrap();
+                                        }
+                                        std::mem::drop(guard);
+
+                                        if required.len() == number_of_matches {
+                                            success = true;
+                                        }
                                     }
-                                    std::mem::drop(guard);
                                 } else {
                                     while (msg.author.id.0 == ctx.cache.read().user.id.0) || !req.check(&msg.content) {
                                         msg = rx.recv().unwrap_or_else(|e| {
@@ -188,13 +197,13 @@ impl EventHandler for Handler {
                                     replace_with
                                 });
                                 std::mem::drop(guard);
-                                if let Err(why) = msg.channel_id.say(&ctx.http, &s) {
+                                if let Err(why) = channel_id.say(&ctx.http, &s) {
                                     eprintln!("Error sending reply: {:?}", why);
                                 }
                                 timeout = *t;
                             },
                             State::DisplayImage(u, t) => {
-                                let res = msg.channel_id.send_message(&ctx.http, |m| {
+                                let res = channel_id.send_message(&ctx.http, |m| {
                                     m.add_file(AttachmentType::Path(Path::new(u)));
                                     m
                                 });
@@ -213,7 +222,7 @@ impl EventHandler for Handler {
                             },
                             State::End => {
                                 let entry = &mut statusMap.lock().unwrap();
-                                let entry = entry.entry(msg.channel_id.0).or_insert(None);
+                                let entry = entry.entry(channel_id.0).or_insert(None);
                                 *entry = None;
                                 break;
                             }
