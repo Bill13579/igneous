@@ -31,7 +31,7 @@ pub fn strip_stylization(s: &str) -> String {
 
 pub struct Handler {
     states: Arc<Vec<State>>,
-    statusMap: Mutex<HashMap<u64, Option<std::sync::mpsc::Sender<Message>>>>,
+    statusMap: Arc<Mutex<HashMap<u64, Option<std::sync::mpsc::Sender<Message>>>>>,
     db: Arc<Mutex<Connection>>,
 }
 impl Handler {
@@ -39,7 +39,7 @@ impl Handler {
         let conn = Connection::open("attrs.db").unwrap();
         Handler {
             states: Arc::new(Handler::gen_state()),
-            statusMap: Mutex::new(HashMap::new()),
+            statusMap: Arc::new(Mutex::new(HashMap::new())),
             db: Arc::new(Mutex::new(conn)),
         }
     }
@@ -85,7 +85,7 @@ impl Handler {
 impl EventHandler for Handler {
     fn message(&self, ctx: Context, msg: Message) {
         let entry = &mut self.statusMap.lock().unwrap();
-        let mut entry = entry.entry(msg.channel_id.0).or_insert(None);
+        let entry = entry.entry(msg.channel_id.0).or_insert(None);
         let mut timeout = 0.0;
         if let None = entry {
             if let State::Trigger(req, t) = &self.states[0] {
@@ -94,6 +94,7 @@ impl EventHandler for Handler {
                     let mut i = 1;
                     let states = self.states.clone();
                     let db = self.db.clone();
+                    let statusMap = self.statusMap.clone();
                     let guard = db.lock().unwrap();
                     let original_user = format!("u{}", msg.author.id.0.to_string());
                     guard.execute(
@@ -203,6 +204,8 @@ impl EventHandler for Handler {
                                     timeout = *t;
                                 },
                                 State::End => {
+                                    let entry = &mut statusMap.lock().unwrap();
+                                    let entry = entry.entry(msg.channel_id.0).or_insert(None);
                                     *entry = None;
                                     break;
                                 }
