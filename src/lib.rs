@@ -70,6 +70,8 @@ impl Handler {
                 "S" => State::Trigger(Requirement::new(data), timeout),
                 "IMG" => State::DisplayImage(data, timeout),
                 "INPUT" => State::Trigger(Requirement::new(data), timeout),
+                "GO_OFFLINE" => State::GoOffline(timeout),
+                "GO_ONLINE" => State::GoOnline(timeout),
                 &_ => {
                     eprintln!("Invalid command: {}", cmd_type);
                     process::exit(1);
@@ -192,7 +194,16 @@ impl EventHandler for Handler {
                                     }
                                     timeout = *t;
                                 },
+                                State::GoOffline(t) => {
+                                    ctx.invisible();
+                                    timeout = *t;
+                                },
+                                State::GoOnline(t) => {
+                                    ctx.online();
+                                    timeout = *t;
+                                },
                                 State::End => {
+                                    *entry = None;
                                     break;
                                 }
                             }
@@ -235,6 +246,8 @@ pub enum State {
     Trigger(Requirement, f32),
     Display(String, f32),
     DisplayImage(String, f32),
+    GoOffline(f32),
+    GoOnline(f32),
     End,
 }
 
