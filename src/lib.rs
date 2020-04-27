@@ -58,7 +58,7 @@ impl Handler {
             });
         let mut states = Vec::new();
         let commands = contents.split("\n").map(|v| v.trim().to_owned()).filter(|v| v != "");
-        let command_matcher = Regex::new(r"^([A-Z]*?)!(?:\[?)(.*?)(?:\]?)\+([0-9.]*)$").unwrap();
+        let command_matcher = Regex::new(r"^([a-zA-Z_]*?)!(?:\[?)(.*?)(?:\]?)\+([0-9.]*)$").unwrap();
         for c in commands {
             let matched = command_matcher.captures_iter(&c).next().unwrap();
             let cmd_type: String = matched.get(1).unwrap().as_str().to_owned();
