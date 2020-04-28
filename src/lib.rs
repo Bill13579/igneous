@@ -66,10 +66,9 @@ impl Handler {
             let timeout: String = matched.get(3).unwrap().as_str().to_owned();
             let timeout: f32 = timeout.parse().unwrap();
             states.push(match cmd_type.as_str() {
-                "I" => State::Display(data, timeout),
-                "S" => State::Trigger(Requirement::new(data), timeout),
+                "R" => State::Display(data, timeout),
                 "IMG" => State::DisplayImage(data, timeout),
-                "INPUT" => State::Trigger(Requirement::new(data), timeout),
+                "T" => State::Trigger(Requirement::new(data), timeout),
                 "GO_OFFLINE" => State::GoOffline(timeout),
                 "GO_ONLINE" => State::GoOnline(timeout),
                 &_ => {
